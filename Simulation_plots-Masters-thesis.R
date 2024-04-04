@@ -1,5 +1,8 @@
 library(ggplot2)
 library(tidyverse)
+library(patchwork)
+source("Data_generation-Masters_thesis")
+source("Estimation_Simulation-Masters_thesis")
 
 est_name <- c(rep("HAL-TMLE",200),rep("HAL",200),rep("GLM-TMLE",200),rep("GLM",200))
 est_name <- as.factor(est_name)
@@ -59,14 +62,6 @@ ggplot(data = dfLin, aes(x = est_name1, y = V1)) +
   geom_hline(yintercept = ATE_Lin, color = "red") +
   labs(x = "Estimator", y = "Values", fill = "Estimator")
 
-GLM.se1 <- mean(dfLin$V2[dfLin$est_name1=="GLM-TMLE"])
-HAL.se1 <- mean(dfLin$V2[dfLin$est_name1=="HAL-TMLE"])
-
-GLM.CI1 <- ATE_Lin + c(-1.96,1.96)*GLM.se1 
-HAL.CI1 <- ATE_Lin + c(-1.96,1.96)*HAL.se1
-
-fun11 <- function(x){dnorm(x,mean = ATE_Lin, sd = GLM.se1)}
-fun21 <- function(x){dnorm(x,mean = ATE_Lin, sd = HAL.se1)}
 
 ggplot(data = dfLin, aes(x = V1, fill = est_name1)) +
   geom_histogram(aes(y=after_stat(density)), binwidth = 0.025, position = "dodge") +
@@ -87,31 +82,90 @@ ggplot(data = dfLin, aes(x = V1, fill = est_name1)) +
   labs(x = "Values", y = "Density", fill = "Estimator")
 
 
-?geom_ribbon
-CI <- list(NA,c(ATE_jumps - 1.96*HAL.se,ATE_jumps + 1.96*HAL.se),
-           NA,c(ATE_jumps - 1.96*GLM.se,ATE_jumps + 1.96*GLM.se))
-est_name <- c("HAL","HAL-TMLE","GLM","GLM-TMLE")
-est_name <- as.factor(est_name)
 
-dfCI <- as.data.frame(cbind(CI,est_name))
+est_name_simple <- c(rep("HAL-TMLE",200),rep("GLM-TMLE",200))
 
-dfCI <- dfCI %>%
-  mutate(est_name = factor(est_name))
+dfsimple1 <- rbind(drop_na(simsimple1),drop_na(simsimple1GLM))
+dfsimple2 <- rbind(drop_na(simsimple2),drop_na(simsimple2GLM))
+dfsimple3 <- rbind(drop_na(simsimple3),drop_na(simsimple3GLM))
 
-df <- left_join(dfJumps,dfCI,copy=TRUE)
+dfsimple1 <- cbind(dfsimple1,est_name_simple)
+dfsimple2 <- cbind(dfsimple2,est_name_simple)
+dfsimple3 <- cbind(dfsimple3,est_name_simple)
 
-HAL_width <- 0.7372438 - 0.5738202
+p1 <- ggplot(data = dfsimple1, aes(x = V1, color= est_name_simple)) +
+  geom_density() +
+  stat_function(fun = fun3, color = "black") +
+  labs(x = "Values", y = "Density", color = "Estimator") +
+  theme(legend.position="none") + 
+  ggtitle("500 observations")
 
-ggplot(data = dfJumps, aes(x = V1, fill = est_name)) +
-  geom_histogram(aes(y = after_stat(density)), binwidth = 0.025, position = "dodge") +
-  facet_wrap(~ est_name) +
-  geom_vline(aes(xintercept = ATE_jumps), color = "red") +
-  geom_function(data = data.frame(V1 = 0, est_name = "GLM-TMLE"), fun = fun1) +
-  geom_function(data = data.frame(V1 = 0, est_name = "HAL-TMLE"), fun = fun2) +
-  geom_ribbon(data = dfJumps[dfJumps$est_name == "GLM-TMLE",], 
-              aes(ymin = 0, ymax = Inf, xmin = GLM.CI[1], xmax = GLM.CI[2]), 
-              fill = "gray", alpha = 0.5) +
-  geom_ribbon(data = dfJumps[dfJumps$est_name == "HAL-TMLE",], 
-              aes(ymin = 0, ymax = Inf, xmin = 0.5738202, xmax = 0.5738202 + HAL_width), 
-              fill = "gray", alpha = 0.5) +
-  labs(x = "Values", y = "Density", fill = "Estimator")
+p2 <- ggplot(data = dfsimple2, aes(x = V1, color= est_name_simple)) +
+  geom_density() +
+  stat_function(fun = fun4, color = "black") +
+  labs(x = "Values", y = "Density", color = "Estimator") +
+  theme(legend.position="none") + 
+  ggtitle("1000 observations")
+
+p3 <- ggplot(data = dfsimple3, aes(x = V1, color= est_name_simple)) +
+  geom_density() +
+  stat_function(fun = fun5, color = "black") +
+  labs(x = "Values", y = "Density", color = "Estimator") + 
+  ggtitle("2000 observations")
+
+
+
+p4 <- ggplot(data = dfcover, aes(x=num_obs_cover, y = coverage, color = est_name_cover)) +
+  geom_line() +
+  geom_point(aes(shape = factor(est_name_cover)), size = 3) +
+  geom_hline(yintercept = 0.95) +
+  labs(x = "Number of observatiosn", y = "Coverage", color = "Estimator") +
+  guides(shape = "none")
+
+p1 + p3 + p2 + p4 +
+  plot_layout(ncol = 2)
+
+
+p4
+dfsimple <- dfsimple %>%
+  mutate(est_name_simple = factor(est_name_simple))
+
+fun3 <- function(x){dnorm(x,mean=ATE_simplejumps,sd=mean(simsimple1$V2[1:200]))}
+fun4 <- function(x){dnorm(x,mean=ATE_simplejumps,sd=mean(simsimple2$V2[1:200]))}
+fun5 <- function(x){dnorm(x,mean=ATE_simplejumps,sd=mean(simsimple3$V2[1:200]))}
+
+
+
+ggplot(data = dfsimple, aes(x = V1, color= est_name_simple)) +
+  facet_wrap(~num_obs) +
+  geom_density() +
+  stat_function(fun = fun5, color = "black")
+  
+  
+  
+  geom_function(data = data.frame(V1 = 0, num_obs = "500"),
+                fun = fun3) +
+  geom_function(data = data.frame(V1 = 0, num_obs = "1000"),
+                fun = fun4) +
+  geom_function(data = data.frame(V1 = 0, num_obs = "2000"),
+                fun = fun5)
+
+ggplot(data = dfsimple, aes(x = V1, colour = est_name_simple)) +
+  facet_wrap(~num_obs) +
+  geom_density() +
+  geom_function(data = data.frame(V1 = 0, num_obs = factor("500")),
+                fun = fun3) +
+  geom_function(data = data.frame(V1 = 0, num_obs = factor("1000")),
+                fun = fun4) +
+  geom_function(data = data.frame(V1 = 0, num_obs = factor("2000")),
+                fun = fun5)
+
+ggplot(data = dfsimple, aes(x = V1, color = est_name_simple)) +
+  facet_grid(~factor(num_obs, levels = c("500", "1000", "2000"))) +
+  geom_density() +
+  geom_function(data = data.frame(V1 = 0, num_obs = factor("500")),
+                fun = fun3, aes(fill = num_obs)) +
+  geom_function(data = data.frame(V1 = 0, num_obs = factor("1000")),
+                fun = fun4, aes(fill = num_obs)) +
+  geom_function(data = data.frame(V1 = 0, num_obs = factor("2000")),
+                fun = fun5, aes(fill = num_obs))
